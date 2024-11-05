@@ -1,0 +1,69 @@
+ISL Translation Log
+==================================================
+
+
+Time: 03:25:50
+English: l
+Hindi: एल
+Marathi: l
+------------------------------
+
+Time: 03:26:00
+English: thank
+Hindi: धन्यवाद
+Marathi: धन्यवाद
+------------------------------
+
+Time: 03:26:04
+English: thank
+Hindi: धन्यवाद
+Marathi: धन्यवाद
+------------------------------
+
+Time: 03:26:06
+English: thank thank
+Hindi: धन्यवाद धन्यवाद
+Marathi: धन्यवाद धन्यवाद
+------------------------------
+
+Time: 03:26:12
+English: thank thankl
+Hindi: धन्यवाद धन्यवाद
+Marathi: धन्यवाद धन्यवाद
+------------------------------
+
+Time: 03:26:14
+English: thank thankl
+Hindi: धन्यवाद धन्यवाद
+Marathi: धन्यवाद धन्यवाद
+------------------------------
+
+Time: 03:26:19
+English: thank thankl h
+Hindi: धन्यवाद धन्यवाद एच
+Marathi: धन्यवाद धन्यवाद एच
+------------------------------
+
+Time: 03:26:24
+English: thank thankl he
+Hindi: धन्यवाद, धन्यवाद वह
+Marathi: धन्यवाद त्याचे आभार
+------------------------------
+
+Time: 03:26:30
+English: thank thankl hel
+Hindi: धन्यवाद धन्यवाद जेल
+Marathi: धन्यवाद जेल धन्यवाद
+------------------------------
+
+Time: 03:26:36
+English: thank thankl hell
+Hindi: धन्यवाद नरक
+Marathi: धन्यवाद नरक
+------------------------------
+
+Time: 03:26:43
+English: thank thankl hello
+Hindi: धन्यवाद धन्यवाद नमस्ते
+Marathi: धन्यवाद धन्यवाद नमस्कार
+------------------------------
