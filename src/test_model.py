@@ -21,17 +21,27 @@ class SignPredictor:
             self.current_sign = None
             self.last_prediction_time = time.time()
             self.prediction_cooldown = 0.5
+
+            self.translations = {
+                'hello': {'hindi': 'नमस्ते', 'marathi': 'नमस्कार'},
+                'thank_you': {'hindi': 'धन्यवाद', 'marathi': 'धन्यवाद'},
+                'please': {'hindi': 'कृपया', 'marathi': 'कृपया'},
+                'water': {'hindi': 'पानी', 'marathi': 'पाणी'},
+            }
             
         except Exception as e:
             print(f"Error in initialization: {e}")
             raise
 
     def pad_landmarks(self, landmarks):
-        """Pad landmarks to 126 features if only one hand is detected"""
-        if len(landmarks) == 63:  # One hand detected
-            # Pad with zeros for the second hand
+        if len(landmarks) == 63:
             return np.concatenate([landmarks, np.zeros(63)])
         return landmarks
+
+    def get_translation(self, sign, language='hindi'):
+        if sign in self.translations:
+            return self.translations[sign][language]
+        return sign
 
     def predict_sign(self):
         try:
@@ -47,7 +57,6 @@ class SignPredictor:
             while True:
                 success, frame = cap.read()
                 if not success:
-                    print("Error: Failed to read frame")
                     break
 
                 try:
@@ -57,7 +66,6 @@ class SignPredictor:
                     current_time = time.time()
 
                     if landmarks is not None:
-                        # Pad landmarks if needed and reshape
                         landmarks = self.pad_landmarks(landmarks)
                         landmarks = landmarks.reshape(1, -1)
                         
@@ -69,34 +77,53 @@ class SignPredictor:
                                 self.detected_signs.append(prediction)
                                 self.last_prediction_time = current_time
 
-                    # Display current sign
-                    cv2.putText(frame, f"Current: {self.current_sign}", (10, 50), 
-                               cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2)
-
-                    # Display detected signs string
-                    detected_text = " ".join(self.detected_signs)
-                    y_pos = 90
-                    while detected_text:
-                        if len(detected_text) > 40:
-                            space_index = detected_text[:40].rfind(' ')
-                            if space_index == -1:
-                                space_index = 40
-                            line = detected_text[:space_index]
-                            detected_text = detected_text[space_index:].lstrip()
-                        else:
-                            line = detected_text
-                            detected_text = ""
+                    # Display current sign with translations
+                    if self.current_sign:
+                        hindi_trans = self.get_translation(self.current_sign, 'hindi')
+                        marathi_trans = self.get_translation(self.current_sign, 'marathi')
                         
-                        cv2.putText(frame, line, (10, y_pos), 
-                                   cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 0, 0), 2)
-                        y_pos += 30
+                        cv2.putText(frame, f"Sign: {self.current_sign}", (10, 30), 
+                                  cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 0), 2)
+                        cv2.putText(frame, f"Hindi: {hindi_trans}", (10, 60), 
+                                  cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 0), 2)
+                        cv2.putText(frame, f"Marathi: {marathi_trans}", (10, 90), 
+                                  cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 0), 2)
+
+                    # Display sentence
+                    if self.detected_signs:
+                        # English sentence
+                        eng_text = " ".join(self.detected_signs)
+                        # Hindi sentence
+                        hindi_text = " ".join([self.get_translation(sign, 'hindi') 
+                                             for sign in self.detected_signs])
+                        # Marathi sentence
+                        marathi_text = " ".join([self.get_translation(sign, 'marathi') 
+                                               for sign in self.detected_signs])
+
+                        y_pos = 150
+                        # Display all sentences
+                        for text in [eng_text, hindi_text, marathi_text]:
+                            while text:
+                                if len(text) > 40:
+                                    space_index = text[:40].rfind(' ')
+                                    if space_index == -1:
+                                        space_index = 40
+                                    line = text[:space_index]
+                                    text = text[space_index:].lstrip()
+                                else:
+                                    line = text
+                                    text = ""
+                                
+                                cv2.putText(frame, line, (10, y_pos), 
+                                          cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 0, 0), 2)
+                                y_pos += 30
 
                     # Instructions
                     cv2.putText(frame, "Press 'c' to clear | 'q' to quit", 
-                               (10, frame.shape[0] - 30), 
-                               cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 0, 255), 2)
+                              (10, frame.shape[0] - 30), 
+                              cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 0, 255), 2)
 
-                    cv2.imshow("Sign Language Detection", frame)
+                    cv2.imshow("Sign Language Translation", frame)
 
                 except Exception as e:
                     print(f"Error in frame processing: {e}")
@@ -104,27 +131,17 @@ class SignPredictor:
 
                 key = cv2.waitKey(1) & 0xFF
                 if key == ord('q'):
-                    print("Quit command received")
                     break
                 elif key == ord('c'):
-                    print("Clearing detected signs")
                     self.detected_signs = []
 
-        except Exception as e:
-            print(f"Error in prediction loop: {e}")
-        
         finally:
-            print("Releasing camera...")
             cap.release()
             cv2.destroyAllWindows()
-            print("Camera released and windows closed")
 
 def main():
-    try:
-        predictor = SignPredictor()
-        predictor.predict_sign()
-    except Exception as e:
-        print(f"Main error: {e}")
+    predictor = SignPredictor()
+    predictor.predict_sign()
 
 if __name__ == "__main__":
     main()
