@@ -18,6 +18,7 @@ class SignPredictor:
         with open(model_path, 'rb') as f:
             self.model = pickle.load(f)
         
+        # Initialize variables
         self.detected_signs = []
         self.current_sign = None
         self.last_prediction = None
@@ -29,20 +30,18 @@ class SignPredictor:
         # Initialize translator
         self.translator = Translator()
 
-        # Setup output directory and file
-        self.output_dir = os.path.join(self.project_root, 'output')
-        os.makedirs(self.output_dir, exist_ok=True)
+        # Create output file with timestamp
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        self.output_file = os.path.join(self.output_dir, f'translations_{timestamp}.txt')
-        
-        # Create file with header
-        with open(self.output_file, 'w', encoding='utf-8') as f:
-            f.write("ISL Translation Log\n")
-            f.write("=" * 50 + "\n\n")
+        self.output_file = os.path.join(self.project_root, 'output', f'translations_{timestamp}.txt')
+        os.makedirs(os.path.join(self.project_root, 'output'), exist_ok=True)
 
-    def save_translation(self, word):
+    def save_to_file(self, english, hindi, marathi):
+        with open(self.output_file, 'a', encoding='utf-8') as f:
+            f.write(f"English: {english}\nHindi: {hindi}\nMarathi: {marathi}\n")
+            f.write("-" * 50 + "\n")
+
+    def translate_text(self, text):
         try:
-            # Basic translations
             basic_translations = {
                 'hello': ('नमस्ते', 'नमस्कार'),
                 'thank you': ('धन्यवाद', 'धन्यवाद'),
@@ -56,35 +55,29 @@ class SignPredictor:
                 'bye': ('अलविदा', 'निरोप'),
                 'food': ('खाना', 'जेवण'),
             }
-
-            word = word.lower().strip()
             
-            # Get translations
-            if word in basic_translations:
-                hindi, marathi = basic_translations[word]
-            else:
-                hindi = self.translator.translate(word, src='en', dest='hi').text
-                marathi = self.translator.translate(word, src='en', dest='mr').text
-
-            # Print to terminal
-            print("\nNew Translation:")
-            print(f"English: {word}")
-            print(f"Hindi: {hindi}")
-            print(f"Marathi: {marathi}")
-            print("-" * 30)
-
-            # Save to file
-            with open(self.output_file, 'a', encoding='utf-8') as f:
-                f.write(f"\nTime: {datetime.now().strftime('%H:%M:%S')}\n")
-                f.write(f"English: {word}\n")
-                f.write(f"Hindi: {hindi}\n")
-                f.write(f"Marathi: {marathi}\n")
-                f.write("-" * 30 + "\n")
-
-            return hindi, marathi
+            text = text.lower().strip()
+            if text in basic_translations:
+                hindi, marathi = basic_translations[text]
+                print(f"\nTranslations:")
+                print(f"English: {text}")
+                print(f"Hindi: {hindi}")
+                print(f"Marathi: {marathi}")
+                self.save_to_file(text, hindi, marathi)
+                return hindi, marathi
+            
+            hindi = self.translator.translate(text, src='en', dest='hi')
+            marathi = self.translator.translate(text, src='en', dest='mr')
+            print(f"\nTranslations:")
+            print(f"English: {text}")
+            print(f"Hindi: {hindi.text}")
+            print(f"Marathi: {marathi.text}")
+            self.save_to_file(text, hindi.text, marathi.text)
+            return hindi.text, marathi.text
+            
         except Exception as e:
             print(f"Translation error: {str(e)}")
-            return word, word
+            return text, text
 
     def predict_sign(self):
         cap = cv2.VideoCapture(0)
@@ -95,10 +88,7 @@ class SignPredictor:
         print("\nStarting Sign Language Detection...")
         print("Translations will appear here in the terminal")
         print("=" * 50)
-        print(f"Saving translations to: {self.output_file}")
 
-        last_word = ""
-        
         while True:
             success, frame = cap.read()
             if not success:
@@ -145,14 +135,9 @@ class SignPredictor:
                           (10, 90), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 165, 0), 2)
 
             if self.detected_signs:
-                current_word = "".join(self.detected_signs)
-                cv2.putText(frame, f"Word: {current_word}", (10, 150), 
+                word = "".join(self.detected_signs)
+                cv2.putText(frame, f"Word: {word}", (10, 150), 
                            cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 0, 0), 2)
-                
-                # Translate only when word changes
-                if current_word != last_word:
-                    self.save_translation(current_word)
-                    last_word = current_word
 
             cv2.putText(frame, "Press: c-clear | q-quit | space-word break", 
                       (10, frame.shape[0] - 30), 
@@ -167,7 +152,6 @@ class SignPredictor:
                 self.detected_signs = []
                 self.last_prediction = None
                 self.hold_count = 0
-                last_word = ""
                 print("\nCleared current word")
             elif key == ord(' '):
                 self.detected_signs.append(' ')
