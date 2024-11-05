@@ -5,6 +5,7 @@ import pickle
 import os
 from hand_detector import HandDetector
 import time
+from googletrans import Translator
 
 class SignPredictor:
     def __init__(self):
@@ -12,22 +13,17 @@ class SignPredictor:
             self.detector = HandDetector()
             self.project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
             
-            # Load the trained model
             model_path = os.path.join(self.project_root, 'models', 'random_forest_model.pkl')
             with open(model_path, 'rb') as f:
                 self.model = pickle.load(f)
             
             self.detected_signs = []
             self.current_sign = None
+            self.last_prediction = None  # Store last prediction
             self.last_prediction_time = time.time()
-            self.prediction_cooldown = 0.5
-
-            self.translations = {
-                'hello': {'hindi': 'नमस्ते', 'marathi': 'नमस्कार'},
-                'thank_you': {'hindi': 'धन्यवाद', 'marathi': 'धन्यवाद'},
-                'please': {'hindi': 'कृपया', 'marathi': 'कृपया'},
-                'water': {'hindi': 'पानी', 'marathi': 'पाणी'},
-            }
+            self.prediction_cooldown = 2.0
+            self.translator = Translator()
+            self.consecutive_same = 0  # Counter for consecutive same predictions
             
         except Exception as e:
             print(f"Error in initialization: {e}")
@@ -38,10 +34,14 @@ class SignPredictor:
             return np.concatenate([landmarks, np.zeros(63)])
         return landmarks
 
-    def get_translation(self, sign, language='hindi'):
-        if sign in self.translations:
-            return self.translations[sign][language]
-        return sign
+    def translate_text(self, text):
+        try:
+            hindi = self.translator.translate(text, dest='hi').text
+            marathi = self.translator.translate(text, dest='mr').text
+            return hindi, marathi
+        except Exception as e:
+            print(f"Translation error: {e}")
+            return text, text
 
     def predict_sign(self):
         try:
@@ -53,6 +53,7 @@ class SignPredictor:
                 return
 
             print("Camera opened successfully")
+            ready_to_capture = True
             
             while True:
                 success, frame = cap.read()
@@ -64,62 +65,66 @@ class SignPredictor:
                     landmarks = self.detector.get_landmarks_array()
 
                     current_time = time.time()
+                    time_since_last = current_time - self.last_prediction_time
 
-                    if landmarks is not None:
+                    if time_since_last >= self.prediction_cooldown:
+                        status_color = (0, 255, 0)
+                        status_text = "Ready to capture"
+                        ready_to_capture = True
+                    else:
+                        status_color = (0, 0, 255)
+                        status_text = f"Wait {self.prediction_cooldown - time_since_last:.1f}s"
+                        ready_to_capture = False
+
+                    if landmarks is not None and ready_to_capture:
                         landmarks = self.pad_landmarks(landmarks)
                         landmarks = landmarks.reshape(1, -1)
-                        
                         prediction = self.model.predict(landmarks)[0]
                         
-                        if current_time - self.last_prediction_time >= self.prediction_cooldown:
+                        if time_since_last >= self.prediction_cooldown:
                             self.current_sign = prediction
-                            if not self.detected_signs or self.detected_signs[-1] != prediction:
-                                self.detected_signs.append(prediction)
-                                self.last_prediction_time = current_time
+                            
+                            # Handle repeated letters
+                            if prediction == self.last_prediction:
+                                self.consecutive_same += 1
+                                if self.consecutive_same >= 2:  # Need to see same letter twice to confirm repeat
+                                    self.detected_signs.append(prediction)
+                                    self.consecutive_same = 0
+                            else:
+                                if not self.detected_signs or prediction != self.detected_signs[-1]:
+                                    self.detected_signs.append(prediction)
+                                self.consecutive_same = 0
+                            
+                            self.last_prediction = prediction
+                            self.last_prediction_time = current_time
+                            ready_to_capture = False
 
-                    # Display current sign with translations
-                    if self.current_sign:
-                        hindi_trans = self.get_translation(self.current_sign, 'hindi')
-                        marathi_trans = self.get_translation(self.current_sign, 'marathi')
-                        
-                        cv2.putText(frame, f"Sign: {self.current_sign}", (10, 30), 
-                                  cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 0), 2)
-                        cv2.putText(frame, f"Hindi: {hindi_trans}", (10, 60), 
-                                  cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 0), 2)
-                        cv2.putText(frame, f"Marathi: {marathi_trans}", (10, 90), 
-                                  cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 0), 2)
+                    # Display current sign and status
+                    cv2.putText(frame, f"Current: {self.current_sign}", (10, 30), 
+                              cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 0), 2)
+                    cv2.putText(frame, status_text, (10, 60), 
+                              cv2.FONT_HERSHEY_SIMPLEX, 0.7, status_color, 2)
+                    
+                    # Show repetition counter when same sign is held
+                    if self.consecutive_same > 0:
+                        cv2.putText(frame, f"Hold for repeat ({self.consecutive_same}/2)", (10, 90),
+                                  cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 165, 0), 2)
 
                     # Display sentence
                     if self.detected_signs:
-                        # English sentence
-                        eng_text = " ".join(self.detected_signs)
-                        # Hindi sentence
-                        hindi_text = " ".join([self.get_translation(sign, 'hindi') 
-                                             for sign in self.detected_signs])
-                        # Marathi sentence
-                        marathi_text = " ".join([self.get_translation(sign, 'marathi') 
-                                               for sign in self.detected_signs])
+                        eng_text = "".join(self.detected_signs)
+                        hindi_text, marathi_text = self.translate_text(eng_text)
 
                         y_pos = 150
-                        # Display all sentences
-                        for text in [eng_text, hindi_text, marathi_text]:
-                            while text:
-                                if len(text) > 40:
-                                    space_index = text[:40].rfind(' ')
-                                    if space_index == -1:
-                                        space_index = 40
-                                    line = text[:space_index]
-                                    text = text[space_index:].lstrip()
-                                else:
-                                    line = text
-                                    text = ""
-                                
-                                cv2.putText(frame, line, (10, y_pos), 
-                                          cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 0, 0), 2)
-                                y_pos += 30
+                        for text, label in [(eng_text, "Word:"), 
+                                          (hindi_text, "Hindi:"), 
+                                          (marathi_text, "Marathi:")]:
+                            cv2.putText(frame, f"{label} {text}", (10, y_pos), 
+                                      cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 0, 0), 2)
+                            y_pos += 40
 
                     # Instructions
-                    cv2.putText(frame, "Press 'c' to clear | 'q' to quit", 
+                    cv2.putText(frame, "Press 'c' to clear | 'q' to quit | Space for word break", 
                               (10, frame.shape[0] - 30), 
                               cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 0, 255), 2)
 
@@ -134,6 +139,12 @@ class SignPredictor:
                     break
                 elif key == ord('c'):
                     self.detected_signs = []
+                    self.consecutive_same = 0
+                    self.last_prediction = None
+                elif key == ord(' '):
+                    self.detected_signs.append(' ')
+                    self.consecutive_same = 0
+                    self.last_prediction = None
 
         finally:
             cap.release()
